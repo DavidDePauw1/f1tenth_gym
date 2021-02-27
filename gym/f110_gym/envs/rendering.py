@@ -47,9 +47,16 @@ ZOOM_OUT_FACTOR = 1/ZOOM_IN_FACTOR
 CAR_LENGTH = 0.58
 CAR_WIDTH = 0.31
 
+# macros for colors
+RED = [255, 0, 0]
+GREEN = [0, 255, 0]
+WHITE = [255, 255, 255]
+
 class EnvRenderer(pyglet.window.Window):
     """
-    A window class inherited from pyglet.window.Window, handles the camera/projection interaction, resizing window, and rendering the environment
+    A window class inherited from pyglet.window.Window, handles the 
+    camera/projection interaction, resizing window, and rendering the 
+    environment
     """
     def __init__(self, width, height, *args, **kwargs):
         """
@@ -66,7 +73,13 @@ class EnvRenderer(pyglet.window.Window):
                       samples=4,
                       depth_size=16,
                       double_buffer=True)
-        super().__init__(width, height, config=conf, resizable=True, vsync=False, *args, **kwargs)
+        super().__init__(width, 
+                         height, 
+                         config=conf, 
+                         resizable=True, 
+                         vsync=False, 
+                         *args, 
+                         **kwargs)
 
         # gl init
         glClearColor(9/255, 32/255, 87/255, 1.)
@@ -89,7 +102,11 @@ class EnvRenderer(pyglet.window.Window):
         # current env agent poses, (num_agents, 3), columns are (x, y, theta)
         self.poses = None
 
-        # current env agent vertices, (num_agents, 4, 2), 2nd and 3rd dimensions are the 4 corners in 2D
+        # optionally use this variable to store points for visualizing planner
+        self.plan = None
+
+        # current env agent vertices, (num_agents, 4, 2), 2nd and 3rd dimensions 
+        # are the 4 corners in 2D
         self.vertices = None
 
         # current score label
@@ -110,7 +127,8 @@ class EnvRenderer(pyglet.window.Window):
 
     def update_map(self, map_path, map_ext):
         """
-        Update the map being drawn by the renderer. Converts image to a list of 3D points representing each obstacle pixel in the map.
+        Update the map being drawn by the renderer. Converts image to a list of 
+        3D points representing each obstacle pixel in the map.
 
         Args:
             map_path (str): absolute path to the map without extensions
@@ -132,7 +150,8 @@ class EnvRenderer(pyglet.window.Window):
                 print(ex)
 
         # load map image
-        map_img = np.array(Image.open(map_path + map_ext).transpose(Image.FLIP_TOP_BOTTOM)).astype(np.float64)
+        map_img = np.array(Image.open(map_path + map_ext) \
+            .transpose(Image.FLIP_TOP_BOTTOM)).astype(np.float64)
         map_height = map_img.shape[0]
         map_width = map_img.shape[1]
 
@@ -150,14 +169,16 @@ class EnvRenderer(pyglet.window.Window):
         map_mask_flat = map_mask.flatten()
         map_points = 50. * map_coords[:, map_mask_flat].T
         for i in range(map_points.shape[0]):
-            self.batch.add(1, GL_POINTS, None, ('v3f/stream', [map_points[i, 0], map_points[i, 1], map_points[i, 2]]), ('c3B/stream', [183, 193, 222]))
+            self._add_new_pt(map_points[i, :], WHITE)
         self.map_points = map_points
 
     def on_resize(self, width, height):
         """
-        Callback function on window resize, overrides inherited method, and updates camera values on top of the inherited on_resize() method.
+        Callback function on window resize, overrides inherited method, and 
+        updates camera values on top of the inherited on_resize() method.
 
-        Potential improvements on current behavior: zoom/pan resets on window resize.
+        Potential improvements on current behavior: zoom/pan resets on window 
+        resize.
 
         Args:
             width (int): new width of window
@@ -188,8 +209,10 @@ class EnvRenderer(pyglet.window.Window):
             y (int): Distance in pixels from the bottom edge of the window.
             dx (int): Relative X position from the previous mouse position.
             dy (int): Relative Y position from the previous mouse position.
-            buttons (int): Bitwise combination of the mouse buttons currently pressed.
-            modifiers (int): Bitwise combination of any keyboard modifiers currently active.
+            buttons (int): Bitwise combination of the mouse buttons currently 
+                pressed.
+            modifiers (int): Bitwise combination of any keyboard modifiers 
+                currently active.
 
         Returns:
             None
@@ -241,7 +264,9 @@ class EnvRenderer(pyglet.window.Window):
 
     def on_close(self):
         """
-        Callback function when the 'x' is clicked on the window, overrides inherited method. Also throws exception to end the python program when in a loop.
+        Callback function when the 'x' is clicked on the window, overrides 
+        inherited method. Also throws exception to end the python program when 
+        in a loop.
 
         Args:
             None
@@ -250,7 +275,8 @@ class EnvRenderer(pyglet.window.Window):
             None
 
         Raises:
-            Exception: with a message that indicates the rendering window was closed
+            Exception: with a message that indicates the rendering window was 
+                closed
         """
 
         super().on_close()
@@ -258,7 +284,9 @@ class EnvRenderer(pyglet.window.Window):
 
     def on_draw(self):
         """
-        Function when the pyglet is drawing. The function draws the batch created that includes the map points, the agent polygons, and the information text, and the fps display.
+        Function when the pyglet is drawing. The function draws the batch 
+        created that includes the map points, the agent polygons, and the 
+        information text, and the fps display.
         
         Args:
             None
@@ -292,12 +320,14 @@ class EnvRenderer(pyglet.window.Window):
         # Draw all batches
         self.batch.draw()
         self.fps_display.draw()
+
         # Remove default modelview matrix
         glPopMatrix()
 
-    def update_obs(self, obs):
+    def update_obs(self, obs, plan=None):
         """
-        Updates the renderer with the latest observation from the gym environment, including the agent poses, and the information text.
+        Updates the renderer with the latest observation from the gym 
+        environment, including the agent poses, and the information text.
 
         Args:
             obs (dict): observation dict from the gym env
@@ -314,17 +344,19 @@ class EnvRenderer(pyglet.window.Window):
         num_agents = len(poses_x)
         if self.poses is None:
             self.cars = []
+            start_pose = np.array([0., 0., 0.])
             for i in range(num_agents):
                 if i == self.ego_idx:
-                    vertices_np = get_vertices(np.array([0., 0., 0.]), CAR_LENGTH, CAR_WIDTH)
-                    vertices = list(vertices_np.flatten())
-                    car = self.batch.add(4, GL_QUADS, None, ('v2f', vertices), ('c3B', [172, 97, 185, 172, 97, 185, 172, 97, 185, 172, 97, 185]))
-                    self.cars.append(car)
+                    car = self._add_new_car(start_pose, np.array(RED))
                 else:
-                    vertices_np = get_vertices(np.array([0., 0., 0.]), CAR_LENGTH, CAR_WIDTH)
-                    vertices = list(vertices_np.flatten())
-                    car = self.batch.add(4, GL_QUADS, None, ('v2f', vertices), ('c3B', [99, 52, 94, 99, 52, 94, 99, 52, 94, 99, 52, 94]))
-                    self.cars.append(car)
+                    car = self._add_new_car(start_pose, np.array(GREEN))
+                self.cars.append(car)
+
+        if plan and self.plan is None:
+            for i in range(plan[0].shape[0]):
+                for j in range(plan[0].shape[1]):
+                    self._add_new_pt([plan[0][i, j], plan[1][i, j], 0], WHITE)
+            self.plan = plan
 
         poses = np.stack((poses_x, poses_y, poses_theta)).T
         for j in range(poses.shape[0]):
@@ -333,4 +365,39 @@ class EnvRenderer(pyglet.window.Window):
             self.cars[j].vertices = vertices
         self.poses = poses
 
-        self.score_label.text = 'Lap Time: {laptime:.2f}, Ego Lap Count: {count:.0f}'.format(laptime=obs['lap_times'][0], count=obs['lap_counts'][obs['ego_idx']])
+        self.score_label.text = 'Lap Time: {t:.2f}, Ego Lap Count: {laps:.0f}' \
+            .format(t=obs['lap_times'][0], 
+                    laps=obs['lap_counts'][obs['ego_idx']])
+
+    def _add_new_car(self, pose, color):
+        """
+        Add a car object to the batch to be drawn each iteration
+
+        Args:
+            pose ([x,y,z] array): desired starting location of new car
+            color (RGB array): desired color of new car
+
+        Returns:
+            VertexList corresponding to the new car
+        """
+
+        v = list(get_vertices(pose, CAR_LENGTH, CAR_WIDTH).flatten())
+        colors = np.concatenate((color, color, color, color))
+        return self.batch.add(4, GL_QUADS, None, ('v2f', v), ('c3B', colors))
+
+    def _add_new_pt(self, pose, color):
+        """
+        Add a single point to the batch to be drawn each iteration
+
+        Args:
+            pose ([x,y,z] array): desired location of the point
+            color (RGB array): desired color of the point
+
+        Returns:
+            VertexList corresponding to the new car
+        """
+        return self.batch.add(1, 
+                              GL_POINTS, 
+                              None, 
+                              ('v3f/stream', pose), 
+                              ('c3B/stream', color))
