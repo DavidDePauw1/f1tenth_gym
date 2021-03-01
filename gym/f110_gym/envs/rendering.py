@@ -48,9 +48,9 @@ CAR_LENGTH = 0.58
 CAR_WIDTH = 0.31
 
 # macros for colors
-RED = [255, 0, 0]
-GREEN = [0, 255, 0]
-WHITE = [255, 255, 255]
+RED = np.array([255, 0, 0])
+GREEN = np.array([0, 255, 0])
+WHITE = np.array([255, 255, 255])
 
 class EnvRenderer(pyglet.window.Window):
     """
@@ -97,13 +97,14 @@ class EnvRenderer(pyglet.window.Window):
         self.batch = pyglet.graphics.Batch()
 
         # current env map
-        self.map_points = None
+        self.map_pts = None
         
         # current env agent poses, (num_agents, 3), columns are (x, y, theta)
         self.poses = None
 
-        # optionally use this variable to store points for visualizing planner
-        self.plan = None
+        # optionally use these lists to track points for visualizing planner
+        self.plan_pts = None
+        self.sample_pts = None
 
         # current env agent vertices, (num_agents, 4, 2), 2nd and 3rd dimensions 
         # are the 4 corners in 2D
@@ -111,17 +112,17 @@ class EnvRenderer(pyglet.window.Window):
 
         # current score label
         self.score_label = pyglet.text.Label(
-                'Lap Time: {laptime:.2f}, Ego Lap Count: {count:.0f}'.format(
-                    laptime=0.0, count=0.0),
-                font_size=36,
-                x=0,
-                y=-800,
-                anchor_x='center',
-                anchor_y='center',
-                # width=0.01,
-                # height=0.01,
-                color=(255, 255, 255, 255),
-                batch=self.batch)
+            'Lap Time: {laptime:.2f}, Ego Lap Count: {count:.0f}'.format(
+                laptime=0.0, count=0.0),
+            font_size=36,
+            x=0,
+            y=-800,
+            anchor_x='center',
+            anchor_y='center',
+            # width=0.01,
+            # height=0.01,
+            color=(255, 255, 255, 255),
+            batch=self.batch)
 
         self.fps_display = pyglet.window.FPSDisplay(self)
 
@@ -167,10 +168,9 @@ class EnvRenderer(pyglet.window.Window):
         # mask and only leave the obstacle points
         map_mask = map_img == 0.0
         map_mask_flat = map_mask.flatten()
-        map_points = 50. * map_coords[:, map_mask_flat].T
-        for i in range(map_points.shape[0]):
-            self._add_new_pt(map_points[i, :], WHITE)
-        self.map_points = map_points
+        map_pts = 50. * map_coords[:, map_mask_flat].T
+        self._add_pts(map_pts, np.repeat(WHITE, len(map_pts)))
+        self.map_pts = map_pts
 
     def on_resize(self, width, height):
         """
@@ -296,7 +296,7 @@ class EnvRenderer(pyglet.window.Window):
         """
 
         # if map and poses doesn't exist, raise exception
-        if self.map_points is None:
+        if self.map_pts is None:
             raise Exception('Map not set for renderer.')
         if self.poses is None:
             raise Exception('Agent poses not updated for renderer.')
@@ -341,22 +341,15 @@ class EnvRenderer(pyglet.window.Window):
         poses_y = obs['poses_y']
         poses_theta = obs['poses_theta']
 
-        num_agents = len(poses_x)
         if self.poses is None:
             self.cars = []
             start_pose = np.array([0., 0., 0.])
-            for i in range(num_agents):
+            for i in range(len(poses_x)):
                 if i == self.ego_idx:
-                    car = self._add_new_car(start_pose, np.array(RED))
+                    car = self._add_car(start_pose, RED)
                 else:
-                    car = self._add_new_car(start_pose, np.array(GREEN))
+                    car = self._add_car(start_pose, GREEN)
                 self.cars.append(car)
-
-        if plan and self.plan is None:
-            for i in range(plan[0].shape[0]):
-                for j in range(plan[0].shape[1]):
-                    self._add_new_pt([plan[0][i, j], plan[1][i, j], 0], WHITE)
-            self.plan = plan
 
         poses = np.stack((poses_x, poses_y, poses_theta)).T
         for j in range(poses.shape[0]):
@@ -365,11 +358,25 @@ class EnvRenderer(pyglet.window.Window):
             self.cars[j].vertices = vertices
         self.poses = poses
 
+        if plan:
+            if self.plan_pts is None:
+                sample_pts = []
+                for i in range(plan[0].shape[0]):
+                    for j in range(plan[0].shape[1]):
+                        sample_pts.append([plan[0][i, j], plan[1][i, j], 1])
+                self.sample_pts = np.array(sample_pts)
+                self.plan_pts = self._add_pts(np.array(sample_pts), 
+                                              np.tile(WHITE, len(sample_pts)))
+            else:
+                print(self.poses[self.ego_idx])
+                H = HomogeneousTransform(self.poses[self.ego_idx])
+                self.plan_pts.vertices = H.apply(self.sample_pts).flatten()
+
         self.score_label.text = 'Lap Time: {t:.2f}, Ego Lap Count: {laps:.0f}' \
             .format(t=obs['lap_times'][0], 
                     laps=obs['lap_counts'][obs['ego_idx']])
 
-    def _add_new_car(self, pose, color):
+    def _add_car(self, pose, color):
         """
         Add a car object to the batch to be drawn each iteration
 
@@ -380,24 +387,32 @@ class EnvRenderer(pyglet.window.Window):
         Returns:
             VertexList corresponding to the new car
         """
+        return self.batch.add(4, GL_QUADS, None, 
+            ('v2f', get_vertices(pose, CAR_LENGTH, CAR_WIDTH).flatten()), 
+            ('c3B', np.concatenate((color, color, color, color))))
 
-        v = list(get_vertices(pose, CAR_LENGTH, CAR_WIDTH).flatten())
-        colors = np.concatenate((color, color, color, color))
-        return self.batch.add(4, GL_QUADS, None, ('v2f', v), ('c3B', colors))
-
-    def _add_new_pt(self, pose, color):
+    def _add_pts(self, coords, colors):
         """
         Add a single point to the batch to be drawn each iteration
 
         Args:
-            pose ([x,y,z] array): desired location of the point
-            color (RGB array): desired color of the point
+            coords: np array (n x 3) of desired locations (xyz) of the points
+            colors: np array (n x 3) if desired colors (RGB) of the points
 
         Returns:
-            VertexList corresponding to the new car
+            VertexList corresponding to the new point
         """
-        return self.batch.add(1, 
-                              GL_POINTS, 
-                              None, 
-                              ('v3f/stream', pose), 
-                              ('c3B/stream', color))
+        return self.batch.add(len(coords), GL_POINTS, None, 
+            ('v3f/stream', coords.flatten()), 
+            ('c3B/stream', colors.flatten()))
+
+
+class HomogeneousTransform():
+    def __init__(self, pose):
+        self.H = np.array([[np.cos(pose[2]), -np.sin(pose[2]), 50. * pose[0]],
+                           [np.sin(pose[2]),  np.cos(pose[2]), 50. * pose[1]],
+                           [0,                0,               1]])
+    def apply(self, pts):
+        print(self.H.shape, pts.shape)
+        return (self.H @ pts.T).T
+
