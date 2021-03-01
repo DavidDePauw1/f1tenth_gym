@@ -35,6 +35,7 @@ from pyglet.gl import *
 import numpy as np
 from PIL import Image
 import yaml
+from matplotlib import cm
 
 # helpers
 from f110_gym.envs.collision_models import get_vertices
@@ -105,6 +106,7 @@ class EnvRenderer(pyglet.window.Window):
         # optionally use these lists to track points for visualizing planner
         self.plan_pts = None
         self.sample_pts = None
+        self.colormap = cm.get_cmap('viridis', 8)
 
         # current env agent vertices, (num_agents, 4, 2), 2nd and 3rd dimensions 
         # are the 4 corners in 2D
@@ -368,9 +370,11 @@ class EnvRenderer(pyglet.window.Window):
                 self.plan_pts = self._add_pts(np.array(sample_pts), 
                                               np.tile(WHITE, len(sample_pts)))
             else:
-                print(self.poses[self.ego_idx])
                 H = HomogeneousTransform(self.poses[self.ego_idx])
                 self.plan_pts.vertices = H.apply(self.sample_pts).flatten()
+                z = np.sqrt((self.sample_pts[:, 0] / 100) ** 2 + \
+                            (self.sample_pts[:, 1] / 50) ** 2)
+                self.plan_pts.colors = (255 * self.colormap(z)[:, :-1].flatten()).astype(int)
 
         self.score_label.text = 'Lap Time: {t:.2f}, Ego Lap Count: {laps:.0f}' \
             .format(t=obs['lap_times'][0], 
@@ -413,6 +417,5 @@ class HomogeneousTransform():
                            [np.sin(pose[2]),  np.cos(pose[2]), 50. * pose[1]],
                            [0,                0,               1]])
     def apply(self, pts):
-        print(self.H.shape, pts.shape)
         return (self.H @ pts.T).T
 
