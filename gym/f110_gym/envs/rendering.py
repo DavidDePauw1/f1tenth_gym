@@ -326,7 +326,7 @@ class EnvRenderer(pyglet.window.Window):
         # Remove default modelview matrix
         glPopMatrix()
 
-    def update_obs(self, obs, plan=None):
+    def update_obs(self, obs):
         """
         Updates the renderer with the latest observation from the gym 
         environment, including the agent poses, and the information text.
@@ -360,25 +360,27 @@ class EnvRenderer(pyglet.window.Window):
             self.cars[j].vertices = vertices
         self.poses = poses
 
-        if plan:
-            if self.plan_pts is None:
-                sample_pts = []
-                for i in range(plan[0].shape[0]):
-                    for j in range(plan[0].shape[1]):
-                        sample_pts.append([plan[0][i, j], plan[1][i, j], 1])
-                self.sample_pts = np.array(sample_pts)
-                self.plan_pts = self._add_pts(np.array(sample_pts), 
-                                              np.tile(WHITE, len(sample_pts)))
-            else:
-                H = HomogeneousTransform(self.poses[self.ego_idx])
-                self.plan_pts.vertices = H.apply(self.sample_pts).flatten()
-                z = np.sqrt((self.sample_pts[:, 0] / 100) ** 2 + \
-                            (self.sample_pts[:, 1] / 50) ** 2)
-                self.plan_pts.colors = (255 * self.colormap(z)[:, :-1].flatten()).astype(int)
-
         self.score_label.text = 'Lap Time: {t:.2f}, Ego Lap Count: {laps:.0f}' \
             .format(t=obs['lap_times'][0], 
                     laps=obs['lap_counts'][obs['ego_idx']])
+
+    def update_planning_visualization(self, plan):
+        if self.plan_pts is None:
+            sample_pts = []
+            for i in range(plan[0].shape[0]):
+                for j in range(plan[0].shape[1]):
+                    # resolution of points can be adjusted here by multiplying x and y by some constant
+                    sample_pts.append([plan[0][i, j], plan[1][i, j], 1])
+            self.sample_pts = np.array(sample_pts)
+            self.plan_pts = self._add_pts(np.array(sample_pts), 
+                                          np.tile(WHITE, len(sample_pts)))
+        else:
+            H = HomogeneousTransform(self.poses[self.ego_idx])
+            self.plan_pts.vertices = H.apply(self.sample_pts).flatten()
+            # sample function for z -- move outside this module
+            z = np.sqrt((self.sample_pts[:, 0] / 100) ** 2 + \
+                        (self.sample_pts[:, 1] / 50) ** 2)
+            self.plan_pts.colors = (255 * self.colormap(z)[:, :-1].flatten()).astype(int)
 
     def _add_car(self, pose, color):
         """
