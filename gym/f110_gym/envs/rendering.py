@@ -46,7 +46,7 @@ ZOOM_OUT_FACTOR = 1/ZOOM_IN_FACTOR
 
 # scale factors 
 MAP_SCALE = 50. # original map image -> simulation image
-PLAN_SCALE = 5. # original plan data -> visualization of plan
+PLAN_SCALE = 50. # original plan data -> visualization of plan
 
 # vehicle shape constants
 CAR_LENGTH = 0.58
@@ -385,7 +385,7 @@ class EnvRenderer(pyglet.window.Window):
             # sample function for z -- move outside this module
             z = np.sqrt((self.sample_pts[:, 0] / 100) ** 2 + \
                         (self.sample_pts[:, 1] / 50) ** 2)
-            self.plan_pts.colors = (255 * self.colormap(z)[:, :-1].flatten()).astype(int)
+            self.plan_pts.colors = (255 * self.colormap(np.array(plan[2].flatten()))[:, :-1].flatten()).astype(int)
 
     def _add_car(self, pose, color):
         """
