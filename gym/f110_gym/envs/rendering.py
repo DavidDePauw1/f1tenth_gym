@@ -44,6 +44,10 @@ from f110_gym.envs.collision_models import get_vertices
 ZOOM_IN_FACTOR = 1.2
 ZOOM_OUT_FACTOR = 1/ZOOM_IN_FACTOR
 
+# scale factors 
+MAP_SCALE = 50. # original map image -> simulation image
+PLAN_SCALE = 5. # original plan data -> visualization of plan
+
 # vehicle shape constants
 CAR_LENGTH = 0.58
 CAR_WIDTH = 0.31
@@ -170,7 +174,7 @@ class EnvRenderer(pyglet.window.Window):
         # mask and only leave the obstacle points
         map_mask = map_img == 0.0
         map_mask_flat = map_mask.flatten()
-        map_pts = 50. * map_coords[:, map_mask_flat].T
+        map_pts = MAP_SCALE * map_coords[:, map_mask_flat].T
         self._add_pts(map_pts, np.repeat(WHITE, len(map_pts)))
         self.map_pts = map_pts
 
@@ -355,7 +359,7 @@ class EnvRenderer(pyglet.window.Window):
 
         poses = np.stack((poses_x, poses_y, poses_theta)).T
         for j in range(poses.shape[0]):
-            vertices_np = 50. * get_vertices(poses[j, :], CAR_LENGTH, CAR_WIDTH)
+            vertices_np = MAP_SCALE * get_vertices(poses[j, :], CAR_LENGTH, CAR_WIDTH)
             vertices = list(vertices_np.flatten())
             self.cars[j].vertices = vertices
         self.poses = poses
@@ -369,8 +373,9 @@ class EnvRenderer(pyglet.window.Window):
             sample_pts = []
             for i in range(plan[0].shape[0]):
                 for j in range(plan[0].shape[1]):
-                    # resolution of points can be adjusted here by multiplying x and y by some constant
-                    sample_pts.append([plan[0][i, j], plan[1][i, j], 1])
+                    sample_pts.append([PLAN_SCALE * plan[0][i, j], 
+                                       PLAN_SCALE * plan[1][i, j], 
+                                       1])
             self.sample_pts = np.array(sample_pts)
             self.plan_pts = self._add_pts(np.array(sample_pts), 
                                           np.tile(WHITE, len(sample_pts)))
@@ -415,9 +420,9 @@ class EnvRenderer(pyglet.window.Window):
 
 class HomogeneousTransform():
     def __init__(self, pose):
-        self.H = np.array([[np.cos(pose[2]), -np.sin(pose[2]), 50. * pose[0]],
-                           [np.sin(pose[2]),  np.cos(pose[2]), 50. * pose[1]],
-                           [0,                0,               1]])
+        self.H = np.array([[np.cos(pose[2]), -np.sin(pose[2]), MAP_SCALE * pose[0]],
+                           [np.sin(pose[2]),  np.cos(pose[2]), MAP_SCALE * pose[1]],
+                           [0,                0,               1                 ]])
     def apply(self, pts):
         return (self.H @ pts.T).T
 
