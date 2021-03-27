@@ -346,6 +346,13 @@ class F110Env(gym.Env, utils.EzPickle):
                 'human': slowed down rendering such that the env is rendered in a way that sim time elapsed is close to real time elapsed
                 'human_fast': render as fast as possible
 
+            planner_data (list (xs, ys, zs), default=None): takes in a list of tuples with elements:
+                xs: x indices corresponding to a meshgrid of points to display
+                ys: y indices corresponding to a meshgrid of points to display
+                zs: value of planning function evaluated at corresponding meshgrid location
+
+                Note: first element in list must correspond to the plan of the ego car
+
         Returns:
             None
         """
@@ -357,7 +364,9 @@ class F110Env(gym.Env, utils.EzPickle):
             self.renderer.update_map(self.map_name, self.map_ext)
         self.renderer.update_obs(self.current_obs)
         if planner_data:
-            self.renderer.update_planning_visualization(planner_data)
+            assert (self.ego_idx == 0), "ego_idx must be set to 0 for heatmap plotting functionality"
+            for i in range(len(planner_data)):
+                self.renderer.update_planning_visualization(planner_data[i], i)
         self.renderer.dispatch_events()
         self.renderer.on_draw()
         self.renderer.flip()

@@ -368,7 +368,7 @@ class EnvRenderer(pyglet.window.Window):
             .format(t=obs['lap_times'][0], 
                     laps=obs['lap_counts'][obs['ego_idx']])
 
-    def update_planning_visualization(self, plan):
+    def update_planning_visualization(self, plan, car_index):
         if self.plan_pts is None:
             sample_pts = []
             for i in range(plan[0].shape[0]):
@@ -380,12 +380,11 @@ class EnvRenderer(pyglet.window.Window):
             self.plan_pts = self._add_pts(np.array(sample_pts), 
                                           np.tile(WHITE, len(sample_pts)))
         else:
-            H = HomogeneousTransform(self.poses[self.ego_idx])
+            H = HomogeneousTransform(self.poses[car_index])
             self.plan_pts.vertices = H.apply(self.sample_pts).flatten()
-            # sample function for z -- move outside this module
-            z = np.sqrt((self.sample_pts[:, 0] / 100) ** 2 + \
-                        (self.sample_pts[:, 1] / 50) ** 2)
+            print(plan[2].flatten().shape)
             self.plan_pts.colors = (255 * self.colormap(np.array(plan[2].flatten()))[:, :-1].flatten()).astype(int)
+            self.plan_pts.colors = (255 * self.colormap(plan[2].flatten())).astype(int)
 
     def _add_car(self, pose, color):
         """
