@@ -382,9 +382,7 @@ class EnvRenderer(pyglet.window.Window):
         else:
             H = HomogeneousTransform(self.poses[car_index])
             self.plan_pts.vertices = H.apply(self.sample_pts).flatten()
-            print(plan[2].flatten().shape)
             self.plan_pts.colors = (255 * self.colormap(np.array(plan[2].flatten()))[:, :-1].flatten()).astype(int)
-            self.plan_pts.colors = (255 * self.colormap(plan[2].flatten())).astype(int)
 
     def _add_car(self, pose, color):
         """
