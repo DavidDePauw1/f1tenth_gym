@@ -108,8 +108,9 @@ class EnvRenderer(pyglet.window.Window):
         self.poses = None
 
         # optionally use these lists to track points for visualizing planner
-        self.plan_pts = None
-        self.sample_pts = None
+        # TODO: this should ideally accept more than 2 cars
+        self.plan_pts = [None, None] 
+        self.sample_pts = [None, None]
         self.colormap = cm.get_cmap('viridis', 8)
 
         # current env agent vertices, (num_agents, 4, 2), 2nd and 3rd dimensions 
@@ -369,20 +370,21 @@ class EnvRenderer(pyglet.window.Window):
                     laps=obs['lap_counts'][obs['ego_idx']])
 
     def update_planning_visualization(self, plan, car_index):
-        if self.plan_pts is None:
+        if self.plan_pts[car_index] is None:
             sample_pts = []
             for i in range(plan[0].shape[0]):
                 for j in range(plan[0].shape[1]):
                     sample_pts.append([PLAN_SCALE * plan[0][i, j], 
                                        PLAN_SCALE * plan[1][i, j], 
                                        1])
-            self.sample_pts = np.array(sample_pts)
-            self.plan_pts = self._add_pts(np.array(sample_pts), 
-                                          np.tile(WHITE, len(sample_pts)))
+            self.sample_pts[car_index] = np.array(sample_pts)
+            self.plan_pts[car_index] = self._add_pts(
+                np.array(sample_pts), 
+                np.tile(WHITE, len(sample_pts)))
         else:
             H = HomogeneousTransform(self.poses[car_index])
-            self.plan_pts.vertices = H.apply(self.sample_pts).flatten()
-            self.plan_pts.colors = (255 * self.colormap(np.array(plan[2].flatten()))[:, :-1].flatten()).astype(int)
+            self.plan_pts[car_index].vertices = H.apply(self.sample_pts[car_index]).flatten()
+            self.plan_pts[car_index].colors = (255 * self.colormap(np.array(plan[2].flatten()))[:, :-1].flatten()).astype(int)
 
     def _add_car(self, pose, color):
         """
